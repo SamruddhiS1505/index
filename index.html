@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Crop Advisory | VeriChain</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #020617; color:#d1d5db; }
+    .card { background: rgba(15,23,42,0.65); border-radius: 0.75rem; padding:1rem; border:1px solid rgba(255,255,255,0.06); }
+    .submit-button { background-image: linear-gradient(to right,#0ea5e9,#2563eb); }
+    .fade-in { animation: fadeIn .4s ease-in-out; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(6px) } to { opacity:1; transform: translateY(0) } }
+  </style>
+</head>
+
+<body class="bg-slate-900 text-slate-300">
+  <div class="max-w-6xl mx-auto p-6">
+
+    <header class="text-center mb-8">
+      <h1 class="text-4xl font-bold text-white">Smart Crop Advisory — VeriChain</h1>
+      <p class="text-slate-400 mt-2">Farmers register crop events, vendors scan QR to view crop details & advisory.</p>
+    </header>
+
+    <nav class="flex gap-2 justify-center mb-6">
+      <button onclick="switchTab('farmer')" id="tab-farmer" class="px-4 py-2 bg-slate-800 rounded">Farmer</button>
+      <button onclick="switchTab('logistics')" id="tab-logistics" class="px-4 py-2 bg-slate-800 rounded">Logistics</button>
+      <button onclick="switchTab('vendor')" id="tab-vendor" class="px-4 py-2 bg-slate-800 rounded">Vendor / Verify</button>
+    </nav>
+
+    <main>
+      <!-- Farmer -->
+      <section id="farmer" class="tab card fade-in">
+        <h2 class="text-2xl font-semibold text-white mb-4">Register New Crop Event (Farmer)</h2>
+        <form id="registerCropForm" class="space-y-3">
+          <input id="item_id" class="w-full p-3 rounded bg-slate-800" placeholder="Crop ID (e.g., CROP-001)" required />
+          <input id="supplier" class="w-full p-3 rounded bg-slate-800" placeholder="Farmer Name / Supplier" required />
+          <input id="serial_no" class="w-full p-3 rounded bg-slate-800" placeholder="Batch / Serial No" required />
+
+          <input id="crop_type" class="w-full p-3 rounded bg-slate-800" placeholder="Crop Type (e.g., Tomato)" required />
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input id="sowing_date" type="date" class="p-3 rounded bg-slate-800" required />
+            <input id="harvest_date" type="date" class="p-3 rounded bg-slate-800" />
+            <input id="grow_time_days" type="number" class="p-3 rounded bg-slate-800" placeholder="Grow time (days)" />
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input id="manufactured_date" type="date" class="p-3 rounded bg-slate-800" />
+            <input id="expiry_date" type="date" class="p-3 rounded bg-slate-800" />
+          </div>
+
+          <textarea id="advisory_notes" rows="3" class="w-full p-3 rounded bg-slate-800" placeholder="Advisory notes for vendor/retailer"></textarea>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input id="customer" class="p-3 rounded bg-slate-800" placeholder="Customer / Next Holder" required />
+            <input id="quantity" type="number" class="p-3 rounded bg-slate-800" placeholder="Quantity" required />
+          </div>
+
+          <button type="submit" class="submit-button w-full text-white p-3 rounded font-semibold">Register Crop Event</button>
+        </form>
+
+        <h3 class="mt-6 text-xl text-white">Registered Crops</h3>
+        <div id="registeredCropsList" class="mt-3 space-y-2 max-h-64 overflow-y-auto pr-2">
+          <div class="text-slate-400 p-4">Loading crops...</div>
+        </div>
+      </section>
+
+      <!-- Logistics -->
+      <section id="logistics" class="tab card hidden">
+        <h2 class="text-2xl font-semibold text-white mb-4">Logistics / Update Event</h2>
+        <form id="updateStatusForm" class="space-y-3">
+          <input id="logistics_item_id" class="w-full p-3 rounded bg-slate-800" placeholder="Enter Crop ID to Update" required />
+          <input id="logistics_customer" class="w-full p-3 rounded bg-slate-800" placeholder="Current Holder (e.g., DistributorX)" required />
+          <select id="order_status" class="w-full p-3 rounded bg-slate-800">
+            <option>Shipped</option>
+            <option>In Transit</option>
+            <option>Delivered</option>
+            <option>Cancelled</option>
+          </select>
+          <button type="submit" class="submit-button w-full text-white p-3 rounded">Log Event</button>
+        </form>
+      </section>
+
+      <!-- Vendor -->
+      <section id="vendor" class="tab card hidden">
+        <h2 class="text-2xl font-semibold text-white mb-4">Vendor / Verify Crop</h2>
+        <form id="verifyProductForm" class="space-y-3">
+          <input id="vendorProductId" class="w-full p-3 rounded bg-slate-800" placeholder="Scan or Enter Crop ID" required />
+          <button type="submit" class="submit-button w-full text-white p-3 rounded">Verify & View Crop Details</button>
+        </form>
+
+        <div id="vendorProductInfo" class="mt-4 hidden card"></div>
+      </section>
+    </main>
+
+    <!-- QR Modal -->
+    <div id="productModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4">
+      <div class="bg-slate-800 p-6 rounded-lg max-w-sm w-full text-center">
+        <h3 class="text-white font-semibold mb-2">Crop QR Code</h3>
+        <div class="bg-white inline-block p-3 rounded">
+          <canvas id="qrCodeCanvas"></canvas>
+        </div>
+        <p id="modalProductId" class="mt-3 font-mono text-slate-300 break-all"></p>
+        <button onclick="closeModal()" class="mt-4 w-full bg-slate-600 text-white p-2 rounded">Close</button>
+      </div>
+    </div>
+
+    <div id="toast" class="fixed right-5 bottom-5 bg-slate-900 text-white p-3 rounded shadow hidden"></div>
+
+  </div>
+
+<script>
+/* ------------------ CONFIG ------------------ */
+/* Paste your Supabase project values here */
+const SUPABASE_URL = "https://mklurhapkmthwmfhbtuc.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbHVyaGFwa210aHdtZmhidHVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2Nzg3NzEsImV4cCI6MjA4MDI1NDc3MX0.-I3I-oaOjKwp3lVQN_jYJYtxGyDUxpBR3TqF6bFsI4Y";
+
+const supabaseClient = supabase.createClient('https://mklurhapkmthwmfhbtuc.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbHVyaGFwa210aHdtZmhidHVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2Nzg3NzEsImV4cCI6MjA4MDI1NDc3MX0.-I3I-oaOjKwp3lVQN_jYJYtxGyDUxpBR3TqF6bFsI4Y');
+
+let allProductEvents = [];
+
+/* ------------------ TABS ------------------ */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.add('hidden'));
+  document.getElementById(name).classList.remove('hidden');
+
+  document.querySelectorAll('[id^="tab-"]').forEach(btn => btn.classList.remove('bg-sky-600'));
+  document.getElementById("tab-" + name).classList.add('bg-sky-600');
+}
+
+/* ------------------ TOAST ------------------ */
+function showToast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  t.style.background = err ? '#b91c1c' : '';
+  setTimeout(()=> t.classList.add('hidden'), 3000);
+}
+
+/* ------------------ FETCH & RENDER ------------------ */
+async function fetchAndRenderProducts() {
+  const { data, error } = await supabaseClient.from('crops').select('*');
+  if (error) { console.error(error); showToast('Error fetching crops', true); return; }
+  allProductEvents = data || [];
+  renderRegisteredCrops();
+}
+document.addEventListener('DOMContentLoaded', fetchAndRenderProducts);
+
+/* ------------------ RENDER LIST ------------------ */
+function renderRegisteredCrops() {
+  const unique = [...new Map(allProductEvents.map(e => [e.item_id, e])).values()];
+  const list = document.getElementById('registeredCropsList');
+  if (!unique.length) {
+    list.innerHTML = '<div class="text-slate-400 p-4">No crops found.</div>';
+    return;
+  }
+  list.innerHTML = unique.sort((a,b)=> (a.item_id||'').localeCompare(b.item_id||'')).map(p => `
+    <div class="flex items-center justify-between bg-slate-800/60 p-3 rounded">
+      <div>
+        <div class="text-white font-semibold">${escapeHtml(p.supplier || '')} • ${escapeHtml(p.crop_type || '')}</div>
+        <div class="text-slate-400 font-mono text-sm">${escapeHtml(p.item_id || '')}</div>
+      </div>
+      <div class="flex gap-2">
+        <button class="p-2 rounded bg-slate-700" onclick="openModal('${escapeAttr(p.item_id)}')">QR</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ------------------ QR ------------------ */
+function openModal(id) {
+  document.getElementById('productModal').classList.remove('hidden');
+  document.getElementById('modalProductId').textContent = id;
+  new QRious({ element: document.getElementById('qrCodeCanvas'), value: id, size: 200, level: 'H' });
+}
+function closeModal(){ document.getElementById('productModal').classList.add('hidden'); }
+
+/* ------------------ UTIL ------------------ */
+function escapeHtml(s){ if(!s) return ''; return s.toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function escapeAttr(s){ if(!s) return ''; return s.toString().replaceAll("'", "\\'").replaceAll('"','\\"'); }
+
+/* ------------------ REGISTER ------------------ */
+document.getElementById('registerCropForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const newRecord = {
+    record_id: 'R-' + Math.random().toString(36).substring(2,8).toUpperCase(),
+    item_id: item_id.value.trim(),
+    supplier: supplier.value.trim(),
+    serial_no: serial_no.value.trim(),
+    customer: customer.value.trim(),
+    quantity: parseInt(quantity.value) || 0,
+    order_status: 'Registered',
+    payment_status: 'Paid',
+    /* timestamp is auto-set by DB default */
+    crop_type: crop_type.value.trim(),
+    sowing_date: sowing_date.value || null,
+    harvest_date: harvest_date.value || null,
+    grow_time_days: parseInt(grow_time_days.value) || null,
+    manufactured_date: manufactured_date.value || null,
+    expiry_date: expiry_date.value || null,
+    advisory_notes: advisory_notes.value || null
+  };
+
+  const { error } = await supabaseClient.from('crops').insert([newRecord]);
+  if (error) { console.error(error); showToast('Insert error: ' + error.message, true); return; }
+  showToast('Crop registered ✅');
+  fetchAndRenderProducts();
+  openModal(newRecord.item_id);
+});
+
+/* ------------------ LOGISTICS UPDATE ------------------ */
+document.getElementById('updateStatusForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = logistics_item_id.value.trim();
+  const events = allProductEvents.filter(p => p.item_id === id);
+  if (!events.length) { showToast('Crop ID not found', true); return; }
+
+  // get most recent event
+  const last = events.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+
+  const newRec = {
+    ...last,
+    record_id: 'R-' + Math.random().toString(36).substring(2,8).toUpperCase(),
+    id: null,
+    order_status: order_status.value,
+    customer: logistics_customer.value.trim(),
+    /* timestamp default will be set by DB if omitted, but we include it for clarity */
+    timestamp: new Date().toISOString()
+  };
+
+  const { error } = await supabaseClient.from('crops').insert([newRec]);
+  if (error) { console.error(error); showToast('Error updating logistics!', true); return; }
+  showToast('Logistics event added ✅');
+  fetchAndRenderProducts();
+});
+
+/* ------------------ VENDOR VERIFY ------------------ */
+document.getElementById('verifyProductForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = vendorProductId.value.trim();
+  const history = allProductEvents.filter(p => p.item_id === id).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+  if (!history.length) { showToast('Crop ID not found', true); return; }
+  renderProductInfo(history);
+});
+
+function renderProductInfo(history) {
+  const base = history[0];
+  const container = document.getElementById('vendorProductInfo');
+  const isGenuine = history.some(h => h.order_status === 'Delivered');
+
+  container.innerHTML = `
+    <div class="${isGenuine ? 'bg-green-800/40' : 'bg-orange-800/40'} p-3 rounded mb-3">
+      <strong>${isGenuine ? 'Product Verified' : 'Not Fully Delivered Yet'}</strong>
+    </div>
+
+    <h3 class="text-xl font-semibold text-white">${escapeHtml(base.supplier)} — ${escapeHtml(base.crop_type || '')}</h3>
+    <p class="font-mono text-slate-400">${escapeHtml(base.item_id || '')}</p>
+
+    <div class="text-sm space-y-1 mb-3">
+      <div><strong>Sowing:</strong> ${base.sowing_date || '—'}</div>
+      <div><strong>Harvest:</strong> ${base.harvest_date || '—'}</div>
+      <div><strong>Grow days:</strong> ${base.grow_time_days || '—'}</div>
+      <div><strong>Expiry:</strong> ${base.expiry_date || '—'}</div>
+    </div>
+
+    <h4 class="font-semibold text-white mb-1">Advisory</h4>
+    <div class="bg-slate-800 p-3 rounded">${escapeHtml(base.advisory_notes || 'No advisory provided.')}</div>
+
+    <h4 class="mt-4 font-semibold text-white">Provenance History</h4>
+    <div class="border-t border-slate-700 pt-3 max-h-48 overflow-y-auto text-sm">
+      ${history.slice().reverse().map(h => `
+        <div class="mb-3">
+          <div class="font-semibold text-white">${escapeHtml(h.order_status)} — ${escapeHtml(h.customer || '')}</div>
+          <div class="text-xs text-slate-400">${new Date(h.timestamp).toLocaleString()}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  container.classList.remove('hidden');
+}
+</script>
+</body>
+</html>
