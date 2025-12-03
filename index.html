@@ -215,31 +215,55 @@ document.getElementById('registerCropForm').addEventListener('submit', async e =
 });
 
 /* ------------------ LOGISTICS UPDATE ------------------ */
+/* ------------------ LOGISTICS UPDATE (FIXED) ------------------ */
 document.getElementById('updateStatusForm').addEventListener('submit', async e => {
   e.preventDefault();
+
   const id = logistics_item_id.value.trim();
+
+  // Fetch all events for this item
   const events = allProductEvents.filter(p => p.item_id === id);
   if (!events.length) { showToast('Crop ID not found', true); return; }
 
-  // get most recent event
   const last = events.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
 
+  // Only insert valid fields that exist in your Supabase table
   const newRec = {
-    ...last,
     record_id: 'R-' + Math.random().toString(36).substring(2,8).toUpperCase(),
-    id: null,
+
+    item_id: last.item_id,
+    supplier: last.supplier,
+    serial_no: last.serial_no,
+    crop_type: last.crop_type,
+
+    sowing_date: last.sowing_date,
+    harvest_date: last.harvest_date,
+    grow_time_days: last.grow_time_days,
+    manufactured_date: last.manufactured_date,
+    expiry_date: last.expiry_date,
+    advisory_notes: last.advisory_notes,
+
+    quantity: last.quantity,
+    payment_status: last.payment_status,
+
+    // updated fields
     order_status: order_status.value,
     customer: logistics_customer.value.trim(),
-    /* timestamp default will be set by DB if omitted, but we include it for clarity */
+
     timestamp: new Date().toISOString()
   };
 
   const { error } = await supabaseClient.from('crops').insert([newRec]);
-  if (error) { console.error(error); showToast('Error updating logistics!', true); return; }
+
+  if (error) {
+    console.error(error);
+    showToast('Error updating logistics! → ' + error.message, true);
+    return;
+  }
+
   showToast('Logistics event added ✅');
   fetchAndRenderProducts();
 });
-
 /* ------------------ VENDOR VERIFY ------------------ */
 document.getElementById('verifyProductForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -288,3 +312,4 @@ function renderProductInfo(history) {
 </script>
 </body>
 </html>
+
